@@ -1,4 +1,5 @@
-from sklearn.model_selection import train_test_split
+from matplotlib.ticker import MaxNLocator
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
@@ -11,6 +12,11 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 from imblearn.ensemble import BalancedRandomForestClassifier
 from sklearn.metrics import classification_report
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_validate
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import KFold
 
 # Archivo que contiene los datos
 file = '/home/rafaelfp/Dropbox/Postgrados/MDS/ML/ML2/Tarea_3/data/sobar-72.csv'
@@ -19,16 +25,13 @@ file = '/home/rafaelfp/Dropbox/Postgrados/MDS/ML/ML2/Tarea_3/data/sobar-72.csv'
 df = pd.read_csv(file)
 
 # Se revisa el data set
-head = df.head()
-print('Un resumen del DF\n', head)
+print('Un resumen del DF\n', df.head())
 
 # Se revisa la info de la data para conocer las variables asociadas.
-info = df.info()
-print('Información de las variables\n', info)
+print('Información de las variables\n', df.info())
 
 # Describe para ver rápidamente el comportamiento de las variables.
-describe = df.describe()
-print('Descripción estadística\n', describe)
+print('Descripción estadística\n', df.describe())
 
 # Se revisa la distribución de los datos.
 sns.distplot(df)
@@ -45,12 +48,12 @@ sns.boxplot(data=df)
 plt.xticks(rotation=90)
 plt.show()
 
-# Separando el df
-x = df.iloc[:, :19]
+# Separando el df en x e y
+x = df.iloc[:, :18]
 y = df.iloc[:, 19]
 
 # Dividiendo el df en test y entrenamiento.
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.4,
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2,
                                                     random_state=42)
 
 # Creando los pipelines.
@@ -73,9 +76,8 @@ pipelines = [pipe_svm, pipe_RF, pipe_grad, pipe_BRF]
 for pipe in pipelines:
     pipe.fit(x_train, y_train)
 
-
 # Diccionario de los pipelines
-pipe_dict = {0: 'SVM', 1: 'RF', 2: 'GradienBoost', 3: 'BRF'}
+pipe_dict = {0: 'SVM', 1: 'RF', 2: 'GradientBoost', 3: 'BRF'}
 print('======================================================================')
 
 # Comparando accuracies.
@@ -99,12 +101,39 @@ print('======================================================================')
 # Imprimiendo las matrices de confusion.
 for idx, val in enumerate(pipelines):
     print('Matriz de confusión para', pipe_dict[idx], 'es:\n', confusion_matrix
-          (y_test, val.predict(x_test)))
+    (y_test, val.predict(x_test)))
+
+# Imprimiendo los reportes de clasificación.
+for idx, val in enumerate(pipelines):
+    print('==================================================================')
+    print('Reporte de clasificación para', pipe_dict[idx], 'es:\n',
+          classification_report(y_test, val.predict(x_test)))
 
 print('======================================================================')
 
-# Imprimiendo los reportes de clasificacion.
+# Se grafica ROC
 for idx, val in enumerate(pipelines):
-    print('Reporte de clasificacion para', pipe_dict[idx], 'es:\n',
-          classification_report(y_test, val.predict(x_test)))
+    fpr, tpr, thresholds = roc_curve(y_test, val.predict(x_test))
+    plt.plot(fpr, tpr, linewidth=2, label=pipe_dict[idx])
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.title('ROC Curve')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate (Recall)')
+plt.show()
+# TODO: tratar de poner los label.
 
+# Se calcula AUC
+for idx, val in enumerate(pipelines):
+    print('ROC AUC score para', pipe_dict[idx], 'es:\n',
+          roc_auc_score(y_test, val.predict(x_test)))
+
+# TODO: tratar de identificar las variables que forman el 70%. Revisar tarea
+# TODO: Hacer un pairplot y explicarlo.
+
+
+# Revisando con Cross Validation
+print('Realizando Cross Validation para BRF')
+cv = KFold(5, shuffle=True, random_state=42)
+#for idx, val in enumerate(pipelines):
+cross_validate(pipe_BRF, x_train, y_train, cv=cv,
+               scoring=('accuracy', 'f1', 'roc_auc', 'recall'), n_jobs=-1)
