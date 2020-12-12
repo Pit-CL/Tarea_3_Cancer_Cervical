@@ -1,5 +1,6 @@
-from matplotlib.ticker import MaxNLocator
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.cluster import DBSCAN
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
@@ -12,11 +13,12 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 from imblearn.ensemble import BalancedRandomForestClassifier
 from sklearn.metrics import classification_report
-from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import cross_validate
 from sklearn.metrics import roc_curve
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import KFold
+from imblearn.metrics import classification_report_imbalanced
+import numpy as np
 
 # Archivo que contiene los datos
 file = '/home/rafaelfp/Dropbox/Postgrados/MDS/ML/ML2/Tarea_3/data/sobar-72.csv'
@@ -48,25 +50,57 @@ sns.boxplot(data=df)
 plt.xticks(rotation=90)
 plt.show()
 
+# Primer paso método DBSCAN para la detección de outliers.
+scaler = StandardScaler()
+neigh = NearestNeighbors(n_neighbors=2)
+nbrs = neigh.fit(scaler.fit_transform(df))
+distances, indices = nbrs.kneighbors(scaler.fit_transform(df))
+
+# Se grafica para poder determinar el eps óptimo.
+distances = np.sort(distances, axis=0)
+distances = distances[:, 1]
+plt.plot(distances)
+plt.title('eps Óptimo a través de Nearest Neighbors')
+plt.xlabel('Distancia')
+plt.ylabel('eps')
+plt.show()
+
+# Se aplica el método DBSCAN con el eps encontrado.
+outlier_detection = DBSCAN(
+    eps=5,
+    metric="euclidean",
+    min_samples=3,
+    n_jobs=-1)
+clusters = outlier_detection.fit_predict(scaler.fit_transform(df))
+
 # Separando el df en x e y
-x = df.iloc[:, :18]
-y = df.iloc[:, 19]
+x = df.iloc[:, :18]  # Futures
+y = df.iloc[:, 19]  # Variable dependiente
 
 # Dividiendo el df en test y entrenamiento.
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2,
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.4,
                                                     random_state=42)
 
+# Como en el pipeline traspasaré PCA al clasificador, se debe identificar los
+# PCA que mejor expliquen el problema.
+pca2 = PCA().fit(x)
+plt.plot(pca2.explained_variance_ratio_, linewidth=2)
+plt.xlabel('Componentes')
+plt.ylabel('Ratio de Varianza explicada')
+plt.title('Número de PCA óptimo')
+plt.show()
+
 # Creando los pipelines.
-pipe_svm = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=4)),
+pipe_svm = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=3)),
                      ('clf', svm.SVC(random_state=42))])
 
-pipe_RF = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=4)),
+pipe_RF = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=3)),
                     ('clf', RandomForestClassifier(random_state=42))])
 
-pipe_grad = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=4)),
+pipe_grad = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=3)),
                       ('clf', GradientBoostingClassifier(random_state=42))])
 
-pipe_BRF = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=4)),
+pipe_BRF = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=3)),
                      ('clf', BalancedRandomForestClassifier(random_state=42))])
 
 # Lista de pipelines
@@ -120,20 +154,26 @@ for idx, val in enumerate(pipelines):
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate (Recall)')
 plt.show()
-# TODO: tratar de poner los label.
 
 # Se calcula AUC
 for idx, val in enumerate(pipelines):
     print('ROC AUC score para', pipe_dict[idx], 'es:\n',
           roc_auc_score(y_test, val.predict(x_test)))
 
-# TODO: tratar de identificar las variables que forman el 70%. Revisar tarea
-# TODO: Hacer un pairplot y explicarlo.
-
-
 # Revisando con Cross Validation
-print('Realizando Cross Validation para BRF')
 cv = KFold(5, shuffle=True, random_state=42)
-#for idx, val in enumerate(pipelines):
-cross_validate(pipe_BRF, x_train, y_train, cv=cv,
-               scoring=('accuracy', 'f1', 'roc_auc', 'recall'), n_jobs=-1)
+print('Realizando Cross Validation para los clasificadores')
+for pipe in pipelines:
+    print('Resultado de CV',
+          cross_validate(pipe, x, y,
+                         cv=cv, scoring=('accuracy', 'f1',
+                                         'roc_auc', 'recall')))
+
+# Otra manera de obtener un reporte de clasificación.
+# for idx, val in enumerate(pipelines):
+#     target_names = ['class 0', 'class 1']
+#     print('Reporte de clasificación para',
+#           pipe_dict[idx], 'es:\n',
+#           classification_report_imbalanced(y_test, val.predict(x_test),
+#                                            target_names=target_names))
+
