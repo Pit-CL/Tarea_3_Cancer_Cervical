@@ -170,10 +170,9 @@ for pipe in pipelines:
                                          'roc_auc', 'recall')))
 
 # Otra manera de obtener un reporte de clasificación.
-# for idx, val in enumerate(pipelines):
-#     target_names = ['class 0', 'class 1']
-#     print('Reporte de clasificación para',
-#           pipe_dict[idx], 'es:\n',
-#           classification_report_imbalanced(y_test, val.predict(x_test),
-#                                            target_names=target_names))
-
+for idx, val in enumerate(pipelines):
+    target_names = ['class 0', 'class 1']
+    print('Reporte de clasificación para',
+          pipe_dict[idx], 'es:\n',
+          classification_report_imbalanced(y_test, val.predict(x_test),
+                                           target_names=target_names))
