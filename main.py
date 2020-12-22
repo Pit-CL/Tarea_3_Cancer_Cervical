@@ -95,7 +95,8 @@ pipe_svm = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=3)),
                      ('clf', svm.SVC(random_state=42))])
 
 pipe_RF = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=3)),
-                    ('clf', RandomForestClassifier(random_state=42))])
+                    ('clf', RandomForestClassifier(random_state=42,
+                                                   n_estimators=5000))])
 
 pipe_grad = Pipeline([('scl', StandardScaler()), ('pca', PCA(n_components=3)),
                       ('clf', GradientBoostingClassifier(random_state=42))])
@@ -171,7 +172,7 @@ for pipe in pipelines:
 
 # Otra manera de obtener un reporte de clasificación.
 for idx, val in enumerate(pipelines):
-    target_names = ['class 0', 'class 1']
+    target_names = ['No tiene cáncer', 'Tiene cáncer']
     print('Reporte de clasificación para',
           pipe_dict[idx], 'es:\n',
           classification_report_imbalanced(y_test, val.predict(x_test),
